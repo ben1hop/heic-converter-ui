@@ -1,0 +1,20 @@
+// app global css in SCSS form
+$header-color-bg: rgb(240, 239, 219);
+$background-color: rgb(245, 245, 240); // #F5F5F0
+$text-color: rgb(47, 47, 47);
+
+@font-face {
+  font-family: nunito;
+  src: url(../../public/font/Nunito-VariableFont_wght.ttf);
+}
+
+.my-font {
+  font-family: 'nunito';
+}
+
+:root {
+  --font-familty: #{nunito}, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --header-color-bg: #{$header-color-bg};
+  --text-color: #{$text-color};
+  --background-color: #{$background-color};
+}
