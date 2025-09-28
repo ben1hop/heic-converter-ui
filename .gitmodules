@@ -1,0 +1,3 @@
+[submodule "heic-converter"]
+	path = heic-converter
+	url = https://github.com/ben1hop/heic-converter
