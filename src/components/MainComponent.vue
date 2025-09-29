@@ -3,7 +3,10 @@
     <div class="col row justify-center"><q-icon name="sym_o_replace_image" size="6em" /></div>
 
     <div class="col">
-      <p>Drag and drop images or click to browse. Supported formats: {{ supportedInputFormats }}</p>
+      <p>
+        Drag and drop images or click to browse. Supported formats:
+        {{ Object.values(SupportedInputFormat) }}
+      </p>
     </div>
     <div class="col-auto row items-center justify-center q-gutter-sm q-mx-md">
       <p class="col-auto">Output format:</p>
@@ -11,8 +14,8 @@
         class="col output-selector q-mb-md"
         rounded
         outlined
-        v-model="outputFormat"
-        :options="supportedOutputFormats"
+        v-model="convertArgs.outputFormat"
+        :options="Object.values(SupportedOutputFormat)"
         label="Format"
       />
     </div>
@@ -21,47 +24,63 @@
         <q-icon name="sym_o_upload" size="6em" />
         <p>Drag and drop images here</p>
         <p>or</p>
-        <q-file outlined v-model="inputFiles" label="Click to browse" class="q-mb-md">
-          <template v-slot:prepend>
-            <q-icon name="sym_o_attach_file" />
-          </template>
-        </q-file>
-        <q-btn label="test" @click="testClick()"></q-btn>
+        <div class="row selector-rect q-pa-md items-center">
+          <q-btn
+            outlined
+            v-model="convertArgs.inputFiles"
+            icon="sym_o_attach_file"
+            label="Select files"
+            @click="selectFile"
+            class="q-mb-md col-auto q-mt-md"
+          />
+          <div class="column items-center justify-center" style="width: 52px">
+            <div class="col flex flex-center">
+              <q-separator vertical style="height: 16px" color="primary" />
+            </div>
+            <div class="text-caption q-my-xs">or</div>
+            <div class="col flex flex-center">
+              <q-separator vertical style="height: 16px" color="primary" />
+            </div>
+          </div>
+          <q-btn
+            outlined
+            v-model="convertArgs.inputFiles"
+            icon="sym_r_folder"
+            label="Select directory"
+            @click="selectFolder"
+            class="q-mb-md col-auto q-mt-md"
+          />
+        </div>
       </div>
     </div>
     <div class="col">
-      <q-btn
-        :disabled="!inputFiles || !outputFormat"
-        color="primary"
-        label="Convert"
-        @click="convert"
-      />
+      <q-checkbox v-model="convertArgs.delete"></q-checkbox>
+      <q-btn :disabled="missingArgs" color="primary" label="Convert" @click="convert" />
     </div>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue';
+import { computed, defineComponent, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
+import { desktopDir } from '@tauri-apps/api/path';
+import { SupportedInputFormat, SupportedOutputFormat } from './models';
+
+interface ConvertArgs {
+  inputFiles: string | string[] | null;
+  outputFormat: SupportedOutputFormat | null;
+  delete: boolean;
+}
 
 export default defineComponent({
   name: 'MainComponent',
   setup() {
-    const supportedInputFormats = 'HEIC, HEIF, JPEG, PNG, TIFF, BMP, GIF'; // TODO
-    const supportedOutputFormats = ['JPEG', 'PNG', 'TIFF', 'BMP', 'GIF']; // TODO
-
-    const outputFormat = ref<string | null>(null);
-    const inputFiles = ref<File | File[] | null>(null);
-
+    const convertArgs = ref<ConvertArgs>({ inputFiles: null, outputFormat: null, delete: false });
     const convert = async () => {
-      console.log('Converting', inputFiles.value, 'to', outputFormat.value);
+      console.log('Converting', convertArgs.value.inputFiles, 'to', convertArgs.value.outputFormat);
       try {
-        const result = await invoke('convert', {
-          directory: './images',
-          format: 'png',
-          delete: true,
-        });
+        const result = await invoke('convert', convertArgs.value);
         if (result) {
           console.log(result);
         }
@@ -70,20 +89,62 @@ export default defineComponent({
       }
     };
 
-    const testClick = async () => {
-      const confirmation = await confirm('This action cannot be reverted. Are you sure?', {
-        title: 'Tauri',
-        kind: 'warning',
-      });
-      console.log('Dialog response:', confirmation);
+    const selectFile = async () => {
+      try {
+        const selected = await open({
+          multiple: true,
+          filters: [
+            {
+              name: 'Image',
+              extensions: Object.values(SupportedInputFormat),
+            },
+          ],
+        });
+        if (Array.isArray(selected)) {
+          // user selected multiple files
+          console.log(selected);
+        } else if (selected === null) {
+          // user cancelled the selection
+          console.log(selected);
+        } else {
+          // user selected a single file
+          console.log(selected);
+        }
+      } catch (e) {
+        console.log('Error: ' + String(e));
+      }
     };
+
+    const selectFolder = async () => {
+      try {
+        const selected = await open({
+          multiple: false,
+          directory: true,
+          defaultPath: await desktopDir(),
+        });
+        if (selected === null) {
+          // user cancelled the selection
+          console.log(selected);
+        } else {
+          // user selected a single file
+          console.log(selected);
+        }
+      } catch (e) {
+        console.log('Error: ' + String(e));
+      }
+    };
+
+    const missingArgs = computed(
+      () => !convertArgs.value.inputFiles || convertArgs.value.outputFormat,
+    );
     return {
-      supportedInputFormats,
-      supportedOutputFormats,
-      outputFormat,
-      inputFiles,
+      convertArgs,
+      SupportedInputFormat,
+      SupportedOutputFormat,
       convert,
-      testClick,
+      selectFile,
+      selectFolder,
+      missingArgs,
     };
   },
 });
@@ -112,5 +173,17 @@ export default defineComponent({
   border-style: dashed;
   width: 100%;
   height: 100%;
+}
+
+.selector-rect {
+  border-width: 1px;
+  border-color: var(--q-color-primary);
+  border-radius: 1em;
+  border-style: solid;
+}
+
+.q-btn {
+  width: 200px;
+  background: var(--header-color-bg);
 }
 </style>
